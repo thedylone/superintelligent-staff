@@ -13,8 +13,10 @@ type ApprovalStatus = "pending" | "approved" | "rejected" | null;
 
 type AuthUser = {
   id: string;
+  full_name: string;
   email?: string | null;
-  user_metadata?: Record<string, unknown>;
+  department?: string | null;
+  role_title?: string | null;
 };
 
 type AuthSession = {

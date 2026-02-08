@@ -33,7 +33,7 @@ export default function ProfileOnboarding() {
       setFormData((prev) => ({
         ...prev,
         email: user.email || prev.email,
-        full_name: user.user_metadata?.full_name || user.user_metadata?.name || prev.full_name,
+        full_name: user.full_name || prev.full_name,
       }));
     }
     if (profile) {

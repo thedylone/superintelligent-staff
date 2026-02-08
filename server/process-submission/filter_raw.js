@@ -166,7 +166,7 @@ const extractSubmissionContent = (submission) => {
 
     if (submission.image_urls?.length > 0) {
         contentParts.push(
-            `## Attached Images: ${submission.image_urls.length} image(s)`
+            `## Attached Images: ${submission.image_urls.join(", ")}`
         );
     }
 

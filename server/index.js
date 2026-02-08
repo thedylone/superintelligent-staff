@@ -166,12 +166,14 @@ const ensureUserRole = async (userId, email) => {
       : "employee";
   await runQuery(
     `
-    MERGE (r:UserRole { user_id: $userId })
-    ON CREATE SET r.role = $role
+    MERGE (r:UserRole { role: $role })
+    WITH r
+    MATCH (u:User { id: $userId })
+    MERGE (u)-[:HAS_USER_ROLE]->(r)
     `,
     {
-      userId,
       role,
+      userId,
     }
   );
   return role;
@@ -200,17 +202,13 @@ const createAuthUser = async ({ email, name, picture }) => {
       return {
         id: existingUser.id,
         email: existingUser.email || normalizedEmail,
-        user_metadata: {
-          full_name:
-            name || existingUser.email?.split("@")[0] || normalizedEmail,
-          picture: picture || null,
-        },
+        full_name: name || existingUser.email?.split("@")[0] || normalizedEmail,
+        picture: picture || null,
       };
     }
   }
 
   const id = crypto.randomUUID();
-  await ensureUserRole(id, safeEmail);
 
   // Create initial relationships if this is a new user
   await runQuery(
@@ -218,8 +216,7 @@ const createAuthUser = async ({ email, name, picture }) => {
     MERGE (u:User { id: $userId, email: $email })
     ON CREATE SET u.created_at = $createdAt
     WITH u
-    MERGE (r:UserRole { user_id: $userId })
-    MERGE (u)-[:HAS_USER_ROLE]->(r)
+    RETURN u
     `,
     {
       userId: id,
@@ -227,14 +224,13 @@ const createAuthUser = async ({ email, name, picture }) => {
       createdAt: new Date().toISOString(),
     }
   );
+  await ensureUserRole(id, safeEmail);
 
   return {
     id,
     email: safeEmail,
-    user_metadata: {
-      full_name: name || safeEmail.split("@")[0],
-      picture: picture || null,
-    },
+    full_name: name || safeEmail.split("@")[0],
+    picture: picture || null,
   };
 };
 
@@ -397,7 +393,7 @@ app.get("/api/action-items/:id/comments", async (req, res) => {
       const user = record.get("u");
       return {
         ...comment,
-        user_name: user ? mapNode(user).user_metadata?.full_name ?? null : null,
+        user_name: user ? mapNode(user).full_name ?? null : null,
       };
     });
 
@@ -491,7 +487,7 @@ app.post("/api/action-items/:id/comments", async (req, res) => {
 
     res.json({
       ...comment,
-      user_name: user ? mapNode(user).user_metadata?.full_name ?? null : null,
+      user_name: user ? mapNode(user).full_name ?? null : null,
     });
   } catch (error) {
     console.error("Comment creation failed:", error);
@@ -538,7 +534,7 @@ app.get("/api/activity-log", async (req, res) => {
       const user = record.get("u");
       return {
         ...activity,
-        user_name: user ? mapNode(user).user_metadata?.full_name ?? null : null,
+        user_name: user ? mapNode(user).full_name ?? null : null,
       };
     });
 
@@ -600,7 +596,7 @@ app.post("/api/activity-log", async (req, res) => {
 
     res.json({
       ...activity,
-      user_name: user ? mapNode(user).user_metadata?.full_name ?? null : null,
+      user_name: user ? mapNode(user).full_name ?? null : null,
     });
   } catch (error) {
     console.error("Activity log creation failed:", error);
@@ -682,7 +678,7 @@ app.get("/api/user-roles/:userId", async (req, res) => {
     const { userId } = req.params;
     const result = await runQuery(
       `
-      MATCH (r:UserRole { user_id: $userId })
+      MATCH (u:User { id: $userId })-[:HAS_USER_ROLE]->(r:UserRole)
       RETURN r
       LIMIT 1
       `,
@@ -718,7 +714,7 @@ app.patch("/api/profile", async (req, res) => {
       MATCH (u:User { id: $userId })
       SET u += $updates
       WITH u
-      OPTIONAL MATCH (r:UserRole { user_id: $userId })
+      OPTIONAL MATCH (u)-[:HAS_USER_ROLE]->(r:UserRole)
       FOREACH (role IN CASE WHEN r IS NOT NULL THEN [r] ELSE [] END |
         MERGE (u)-[:HAS_ROLE]->(role)
       )
@@ -853,7 +849,8 @@ app.get("/api/org-network", async (_req, res) => {
             runQuery(
                 `
         MATCH (u:User)
-        OPTIONAL MATCH (u)-[:HAS_USER_ROLE|:HAS_ROLE]->(r:UserRole)
+        WHERE u.approval_status = 'approved' OR (u)-[:HAS_USER_ROLE]->(:UserRole { role: 'founder' })
+        OPTIONAL MATCH (u)-[:HAS_USER_ROLE]->(r:UserRole)
         OPTIONAL MATCH (u)-[rel]-()
         WITH u, r, count(rel) AS connections
         RETURN u, r, connections
@@ -864,6 +861,7 @@ app.get("/api/org-network", async (_req, res) => {
             runQuery(
                 `
         MATCH (u:User)-[rel]->(n)
+        WHERE u.approval_status = 'approved' OR (u)-[:HAS_USER_ROLE]->(:UserRole { role: 'founder' })
         WITH u, rel, n, coalesce(n.created_at, rel.created_at) AS sortTime
         RETURN u, rel, n, sortTime
         ORDER BY sortTime DESC
@@ -872,8 +870,8 @@ app.get("/api/org-network", async (_req, res) => {
             ),
             runQuery(
                 `
-        MATCH (u:User)
-        OPTIONAL MATCH (u)-[:HAS_USER_ROLE|:HAS_ROLE]->(r:UserRole)
+        MATCH (u:User)-[:HAS_USER_ROLE]->(r:UserRole)
+        WHERE u.approval_status = 'approved' OR r.role = 'founder'
         RETURN u, r
         ORDER BY u.created_at ASC
         `

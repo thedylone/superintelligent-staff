@@ -188,18 +188,18 @@ export default function Settings() {
                 ) : (
                   <ScrollArea className="h-[400px]">
                     <div className="space-y-4">
-                      {pendingProfiles.map((pendingProfile) => (
+                      {pendingProfiles.map((pendingProfile, index) => (
                         <div
-                          key={pendingProfile.id}
+                          key={pendingProfile?.id || index}
                           className="p-4 border rounded-lg space-y-3"
                         >
                           <div className="flex items-start justify-between">
                             <div>
                               <h4 className="font-semibold">
-                                {pendingProfile.full_name || "No name provided"}
+                                {pendingProfile?.full_name || "No name provided"}
                               </h4>
                               <p className="text-sm text-muted-foreground">
-                                {pendingProfile.email || "No email provided"}
+                                {pendingProfile?.email || "No email provided"}
                               </p>
                             </div>
                             <Badge variant="outline" className="bg-warning/10 text-warning">
@@ -209,21 +209,21 @@ export default function Settings() {
                           <div className="grid grid-cols-2 gap-2 text-sm">
                             <div>
                               <span className="text-muted-foreground">Department: </span>
-                              {pendingProfile.department || "Not specified"}
+                              {pendingProfile?.department || "Not specified"}
                             </div>
                             <div>
                               <span className="text-muted-foreground">Role: </span>
-                              {pendingProfile.role_title || "Not specified"}
+                              {pendingProfile?.role_title || "Not specified"}
                             </div>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Requested {formatDistanceToNow(new Date(pendingProfile.created_at), { addSuffix: true })}
+                            Requested {formatDistanceToNow(new Date(pendingProfile?.created_at), { addSuffix: true })}
                           </p>
                           <div className="flex gap-2">
                             <Button
                               size="sm"
                               className="bg-success hover:bg-success/90"
-                              onClick={() => approveProfile.mutate({ profileId: pendingProfile.id, status: "approved" })}
+                              onClick={() => approveProfile.mutate({ profileId: pendingProfile?.id, status: "approved" })}
                               disabled={approveProfile.isPending}
                             >
                               <Check className="h-4 w-4 mr-1" />
@@ -232,7 +232,7 @@ export default function Settings() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => approveProfile.mutate({ profileId: pendingProfile.id, status: "rejected" })}
+                              onClick={() => approveProfile.mutate({ profileId: pendingProfile?.id, status: "rejected" })}
                               disabled={approveProfile.isPending}
                             >
                               <X className="h-4 w-4 mr-1" />
@@ -297,9 +297,9 @@ export default function Settings() {
                     <CardDescription>Knowledge graph database for relationships</CardDescription>
                   </div>
                 </div>
-                <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
-                  <AlertCircle className="h-3 w-3 mr-1" />
-                  Not Connected
+                <Badge className="bg-success/10 text-success">
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Connected
                 </Badge>
               </div>
             </CardHeader>
@@ -338,7 +338,7 @@ export default function Settings() {
                   </div>
                   <div>
                     <CardTitle className="text-lg">AI Analysis</CardTitle>
-                    <CardDescription>Powered by Lovable AI Gateway</CardDescription>
+                    <CardDescription>Powered by Open AI (not really)</CardDescription>
                   </div>
                 </div>
                 <Badge className="bg-success/10 text-success">
