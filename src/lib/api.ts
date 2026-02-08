@@ -29,8 +29,15 @@ export const setAuthToken = (token: string | null) => {
 
 type QueryParams = Record<string, string | number | boolean | null | undefined>;
 
+const resolveBaseUrl = () => {
+  if (API_BASE_URL) return API_BASE_URL;
+  if (typeof window !== "undefined") return window.location.origin;
+  return "http://127.0.0.1:8000";
+};
+
 const buildUrl = (path: string, params?: QueryParams) => {
-  const url = new URL(`${API_BASE_URL}${path}`);
+  const baseUrl = resolveBaseUrl();
+  const url = new URL(path, baseUrl);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value === null || value === undefined || value === "") return;
