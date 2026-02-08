@@ -18,6 +18,7 @@ FROM node:20-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
+ENV PORT=8080
 
 # Prevent ONNX Runtime GPU install at runtime too
 ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip

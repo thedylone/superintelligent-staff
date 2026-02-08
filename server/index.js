@@ -974,6 +974,14 @@ app.post(
   }
 );
 
+const distDir = path.join(__dirname, "..", "dist");
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get(/^(?!\/api|\/uploads).*/, (_req, res) => {
+    res.sendFile(path.join(distDir, "index.html"));
+  });
+}
+
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
   jsonError(res, 500, "Unexpected server error.");
