@@ -39,7 +39,12 @@ export function AppSidebar() {
     navigate("/auth");
   };
 
-  const fullName = user.user_metadata.full_name;
+  const fullName =
+    user?.user_metadata &&
+    typeof user.user_metadata === "object" &&
+    "full_name" in user.user_metadata
+      ? (user.user_metadata as { full_name?: string }).full_name
+      : null;
   const userInitials =
     typeof fullName === "string" && fullName.trim().length > 0
       ? fullName

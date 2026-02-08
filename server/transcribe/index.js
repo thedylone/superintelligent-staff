@@ -5,15 +5,24 @@ const elevenlabs = new ElevenLabsClient({
   apiKey: process.env.ELEVENLABS_API_KEY,
 });
 
-export const createElevenLabsEndpoints = (app, getBearerToken, sessions, jsonError) => {
+export const createElevenLabsEndpoints = (app, getBearerToken, getSessionUser, jsonError) => {
   // Authentication middleware for ElevenLabs endpoints
-  const requireAuth = (req, res, next) => {
-    const token = getBearerToken(req);
-    if (!token || !sessions.has(token)) {
-      return jsonError(res, 401, "Not authenticated.");
+  const requireAuth = async (req, res, next) => {
+    try {
+      const token = getBearerToken(req);
+      if (!token) {
+        return jsonError(res, 401, "Not authenticated.");
+      }
+      const user = await getSessionUser(token);
+      if (!user) {
+        return jsonError(res, 401, "Not authenticated.");
+      }
+      req.user = user;
+      next();
+    } catch (error) {
+      console.error("ElevenLabs auth check failed:", error);
+      return jsonError(res, 500, "Failed to authenticate.");
     }
-    req.user = sessions.get(token).user;
-    next();
   };
 
   // ElevenLabs signed URL endpoint for real-time transcription

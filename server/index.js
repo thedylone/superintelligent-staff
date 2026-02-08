@@ -27,7 +27,10 @@ import { registerTestNetworkRoutes } from "./test-network/index.js";
 const app = express();
 const port = process.env.PORT || 8000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const sessions = new Map();
+const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS || 30);
+const SESSION_TTL_MS = Number.isFinite(SESSION_TTL_DAYS)
+  ? SESSION_TTL_DAYS * 24 * 60 * 60 * 1000
+  : 30 * 24 * 60 * 60 * 1000;
 
 // Google OAuth setup
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -83,8 +86,66 @@ const getBearerToken = (req) => {
   return token;
 };
 
+const createSession = async (user) => {
+  const token = crypto.randomUUID();
+  const now = Date.now();
+  const createdAt = new Date(now).toISOString();
+  const expiresAt = new Date(now + SESSION_TTL_MS).toISOString();
+  await runQuery(
+    `
+    MATCH (u:User { id: $userId })
+    OPTIONAL MATCH (u)-[:HAS_SESSION]->(existing:Session)
+    DETACH DELETE existing
+    CREATE (s:Session {
+      token: $token,
+      user_id: $userId,
+      created_at: $createdAt,
+      expires_at: $expiresAt
+    })
+    MERGE (u)-[:HAS_SESSION]->(s)
+    `,
+    {
+      token,
+      userId: user.id,
+      createdAt,
+      expiresAt,
+    }
+  );
+  return token;
+};
+
+const getSessionUser = async (token) => {
+  const now = new Date().toISOString();
+  const result = await runQuery(
+    `
+    MATCH (s:Session { token: $token })
+    WHERE s.expires_at > $now
+    MATCH (u:User { id: s.user_id })
+    RETURN u
+    LIMIT 1
+    `,
+    {
+      token,
+      now,
+    }
+  );
+  return toSingleNode(result, "u");
+};
+
+const deleteSession = async (token) => {
+  await runQuery(
+    `
+    MATCH (s:Session { token: $token })
+    DELETE s
+    `,
+    {
+      token,
+    }
+  );
+};
+
 // Set up ElevenLabs endpoints after helper functions are defined
-createElevenLabsEndpoints(app, getBearerToken, sessions, jsonError);
+createElevenLabsEndpoints(app, getBearerToken, getSessionUser, jsonError);
 
 // Set up RAG-based notification endpoints
 createRAGNotificationEndpoint(app, runQuery, getBearerToken, jsonError);
@@ -117,10 +178,40 @@ const ensureUserRole = async (userId, email) => {
 };
 
 const createAuthUser = async ({ email, name, picture }) => {
+  const normalizedEmail = email?.toLowerCase().trim() || null;
+  const safeEmail =
+    normalizedEmail || `user-${crypto.randomUUID().slice(0, 8)}@example.com`;
+
+  if (normalizedEmail) {
+    const existingResult = await runQuery(
+      `
+      MATCH (u:User)
+      WHERE toLower(u.email) = $email
+      RETURN u
+      LIMIT 1
+      `,
+      {
+        email: normalizedEmail,
+      }
+    );
+    const existingUser = toSingleNode(existingResult, "u");
+    if (existingUser) {
+      await ensureUserRole(existingUser.id, normalizedEmail);
+      return {
+        id: existingUser.id,
+        email: existingUser.email || normalizedEmail,
+        user_metadata: {
+          full_name:
+            name || existingUser.email?.split("@")[0] || normalizedEmail,
+          picture: picture || null,
+        },
+      };
+    }
+  }
+
   const id = crypto.randomUUID();
-  const safeEmail = email || `user-${id.slice(0, 8)}@example.com`;
-  const role = await ensureUserRole(id, safeEmail);
-  
+  await ensureUserRole(id, safeEmail);
+
   // Create initial relationships if this is a new user
   await runQuery(
     `
@@ -136,7 +227,7 @@ const createAuthUser = async ({ email, name, picture }) => {
       createdAt: new Date().toISOString(),
     }
   );
-  
+
   return {
     id,
     email: safeEmail,
@@ -145,15 +236,6 @@ const createAuthUser = async ({ email, name, picture }) => {
       picture: picture || null,
     },
   };
-};
-
-const createSession = (user) => {
-  const token = crypto.randomUUID();
-  sessions.set(token, {
-    user,
-    createdAt: Date.now(),
-  });
-  return token;
 };
 
 app.post("/api/auth/google", async (req, res) => {
@@ -187,7 +269,7 @@ app.post("/api/auth/google", async (req, res) => {
       picture,
     });
 
-    const token = createSession(user);
+    const token = await createSession(user);
     
     res.json({
       redirected: false,
@@ -220,7 +302,7 @@ app.post("/api/auth/oauth", async (req, res) => {
       email,
       name,
     });
-    const token = createSession(user);
+    const token = await createSession(user);
     res.json({
       redirected: false,
       token,
@@ -232,24 +314,37 @@ app.post("/api/auth/oauth", async (req, res) => {
   }
 });
 
-app.get("/api/auth/session", (req, res) => {
-  const token = getBearerToken(req);
-  if (!token || !sessions.has(token)) {
-    return jsonError(res, 401, "Not authenticated.");
+app.get("/api/auth/session", async (req, res) => {
+  try {
+    const token = getBearerToken(req);
+    if (!token) {
+      return jsonError(res, 401, "Not authenticated.");
+    }
+    const user = await getSessionUser(token);
+    if (!user) {
+      return jsonError(res, 401, "Not authenticated.");
+    }
+    res.json({
+      user,
+      token,
+    });
+  } catch (error) {
+    console.error("Session lookup failed:", error);
+    jsonError(res, 500, "Failed to fetch session.");
   }
-  const session = sessions.get(token);
-  res.json({
-    user: session.user,
-    token,
-  });
 });
 
-app.post("/api/auth/sign-out", (req, res) => {
-  const token = getBearerToken(req);
-  if (token) sessions.delete(token);
-  res.json({
-    success: true,
-  });
+app.post("/api/auth/sign-out", async (req, res) => {
+  try {
+    const token = getBearerToken(req);
+    if (token) await deleteSession(token);
+    res.json({
+      success: true,
+    });
+  } catch (error) {
+    console.error("Sign out failed:", error);
+    jsonError(res, 500, "Failed to sign out.");
+  }
 });
 
 app.get("/api/action-items", async (req, res) => {
