@@ -22,6 +22,7 @@ import {
 import { setEnqueueFilteredInfo } from "./process-submission/index.js";
 import { createElevenLabsEndpoints } from "./transcribe/index.js";
 import { createRAGNotificationEndpoint } from "./rag/notify.js";
+import { registerTestNetworkRoutes } from "./test-network/index.js";
 
 const app = express();
 const port = process.env.PORT || 8000;
@@ -87,6 +88,14 @@ createElevenLabsEndpoints(app, getBearerToken, sessions, jsonError);
 
 // Set up RAG-based notification endpoints
 createRAGNotificationEndpoint(app, runQuery, getBearerToken, jsonError);
+
+registerTestNetworkRoutes({
+    app,
+    runQuery,
+    mapNode,
+    jsonError,
+    crypto,
+}); 
 
 const ensureUserRole = async (userId, email) => {
   const founderEmail = process.env.FOUNDER_EMAIL;
@@ -708,6 +717,142 @@ app.get("/api/filtered-information", async (_req, res) => {
     jsonError(res, 500, "Failed to fetch filtered information.");
   }
 });
+
+
+app.get("/api/org-network", async (_req, res) => {
+    try {
+        const [
+            nodeCountsResult,
+            relationshipCountsResult,
+            topConnectionsResult,
+            recentConnectionsResult,
+            orgChartResult,
+        ] = await Promise.all([
+            runQuery(
+                `
+        MATCH (n)
+        RETURN head(labels(n)) AS label, count(n) AS count
+        ORDER BY count DESC
+        `
+            ),
+            runQuery(
+                `
+        MATCH ()-[r]->()
+        RETURN type(r) AS type, count(r) AS count
+        ORDER BY count DESC
+        `
+            ),
+            runQuery(
+                `
+        MATCH (u:User)
+        OPTIONAL MATCH (u)-[:HAS_USER_ROLE|:HAS_ROLE]->(r:UserRole)
+        OPTIONAL MATCH (u)-[rel]-()
+        WITH u, r, count(rel) AS connections
+        RETURN u, r, connections
+        ORDER BY connections DESC, u.created_at DESC
+        LIMIT 12
+        `
+            ),
+            runQuery(
+                `
+        MATCH (u:User)-[rel]->(n)
+        WITH u, rel, n, coalesce(n.created_at, rel.created_at) AS sortTime
+        RETURN u, rel, n, sortTime
+        ORDER BY sortTime DESC
+        LIMIT 20
+        `
+            ),
+            runQuery(
+                `
+        MATCH (u:User)
+        OPTIONAL MATCH (u)-[:HAS_USER_ROLE|:HAS_ROLE]->(r:UserRole)
+        RETURN u, r
+        ORDER BY u.created_at ASC
+        `
+            ),
+        ]);
+
+        const formatName = (props) =>
+            props?.full_name ||
+            props?.name ||
+            props?.title ||
+            props?.decision_title ||
+            props?.email ||
+            props?.id ||
+            "Unknown";
+
+        const nodeCounts = nodeCountsResult.records.map((record) => ({
+            label: record.get("label") || "Unknown",
+            count: record.get("count")?.toNumber?.() || 0,
+        }));
+
+        const relationshipCounts = relationshipCountsResult.records.map((record) => ({
+            type: record.get("type") || "RELATES_TO",
+            count: record.get("count")?.toNumber?.() || 0,
+        }));
+
+        const topConnectors = topConnectionsResult.records.map((record) => {
+            const user = mapNode(record.get("u"));
+            const roleNode = record.get("r");
+            const role = roleNode ? mapNode(roleNode).role : null;
+            return {
+                id: user.id,
+                name: formatName(user),
+                email: user.email || null,
+                role,
+                department: user.department || null,
+                title: user.role_title || null,
+                connections: record.get("connections")?.toNumber?.() || 0,
+            };
+        });
+
+        const recentConnections = recentConnectionsResult.records.map((record) => {
+            const userNode = record.get("u");
+            const targetNode = record.get("n");
+            const relationship = record.get("rel");
+            const user = mapNode(userNode);
+            const target = mapNode(targetNode);
+            return {
+                type: relationship?.type || "RELATED_TO",
+                created_at: record.get("sortTime") || null,
+                from: {
+                    id: user.id,
+                    name: formatName(user),
+                },
+                to: {
+                    id: target.id,
+                    label: targetNode?.labels?.[0] || "Node",
+                    name: formatName(target),
+                },
+            };
+        });
+
+        res.json({
+            nodeCounts,
+            relationshipCounts,
+            topConnectors,
+            recentConnections,
+            orgChartNodes: orgChartResult.records.map((record) => {
+                const user = mapNode(record.get("u"));
+                const roleNode = record.get("r");
+                const role = roleNode ? mapNode(roleNode).role : null;
+                return {
+                    id: user.id,
+                    name: formatName(user),
+                    email: user.email || null,
+                    title: user.role_title || null,
+                    department: user.department || null,
+                    role,
+                    managerId: user.approved_by || null,
+                };
+            }),
+        });
+    } catch (error) {
+        console.error("Org network fetch failed:", error);
+        jsonError(res, 500, "Failed to fetch org network.");
+    }
+});
+
 
 app.post(
   "/api/submissions",
