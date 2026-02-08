@@ -200,6 +200,19 @@ app.post("/api/auth/google", async (req, res) => {
   }
 });
 
+app.get("/api/auth/google/config", (_req, res) => {
+  if (!GOOGLE_CLIENT_ID) {
+    return jsonError(
+      res,
+      500,
+      "Google OAuth not configured. Please set GOOGLE_CLIENT_ID environment variable."
+    );
+  }
+  return res.json({
+    clientId: GOOGLE_CLIENT_ID,
+  });
+});
+
 app.post("/api/auth/oauth", async (req, res) => {
   try {
     const { email, name } = req.body || {};

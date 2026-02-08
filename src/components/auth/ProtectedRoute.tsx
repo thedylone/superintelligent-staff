@@ -33,6 +33,7 @@ export function ProtectedRoute({
   if (requireApproval && userRole !== "founder") {
     if (
       !hasProfile ||
+      !approvalStatus ||
       approvalStatus === "pending" ||
       approvalStatus === "rejected"
     ) {

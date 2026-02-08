@@ -12,7 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 export default function ProfileOnboarding() {
-  const { user } = useAuth();
+  const { user, refreshUserData } = useAuth();
   const { data: profile, isLoading } = useProfile();
   const updateProfile = useUpdateProfile();
   const navigate = useNavigate();
@@ -51,11 +51,16 @@ export default function ProfileOnboarding() {
     if (!user || !profile || profile.approval_status !== "pending") return;
 
     const pollInterval = setInterval(async () => {
-      const response = await api.get<{ profile: { approval_status?: string } | null }>("/api/profile", {
-        userId: user.id,
-      });
+      const response = await api.get<{ profile: { approval_status?: string } | null }>(
+        "/api/profile",
+        {
+          userId: user.id,
+        }
+      );
 
       if (response.profile?.approval_status === "approved") {
+        clearInterval(pollInterval);
+        await refreshUserData();
         queryClient.invalidateQueries({ queryKey: ["profile"] });
         toast.success("Your profile has been approved!");
         navigate("/", { replace: true });
@@ -73,32 +78,27 @@ export default function ProfileOnboarding() {
       return;
     }
 
-    // Check if profile exists
-    if (profile) {
-      updateProfile.mutate(formData, {
-        onSuccess: () => {
+    const isFirstTime = !profile?.approval_status;
+    const updates = {
+      ...formData,
+      ...(isFirstTime ? { approval_status: "pending" } : {}),
+    };
+
+    updateProfile.mutate(updates, {
+      onSuccess: () => {
+        if (isFirstTime) {
+          toast.success("Profile submitted for approval");
+          queryClient.invalidateQueries({ queryKey: ["profile"] });
+        } else {
           setIsEditing(false);
         }
-      });
-    } else {
-      updateProfile.mutate(
-        {
-          ...formData,
-          approval_status: "pending",
-        },
-        {
-          onSuccess: () => {
-            toast.success("Profile submitted for approval");
-            window.location.reload();
-          },
-          onError: (error) => {
-            toast.error("Failed to submit profile", {
-              description: error instanceof Error ? error.message : "Unknown error",
-            });
-          },
-        }
-      );
-    }
+      },
+      onError: (error) => {
+        toast.error("Failed to submit profile", {
+          description: error instanceof Error ? error.message : "Unknown error",
+        });
+      },
+    });
   };
 
   const { userRole } = useAuth();

@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+  useCallback,
+} from "react";
 import { api, setAuthToken } from "@/lib/api";
 
 type UserRole = "founder" | "employee" | null;
@@ -22,6 +29,7 @@ interface AuthContextType {
   approvalStatus: ApprovalStatus;
   hasProfile: boolean;
   isLoading: boolean;
+  refreshUserData: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -35,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [hasProfile, setHasProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUserData = async (userId: string) => {
+  const fetchUserData = useCallback(async (userId: string) => {
     let role: UserRole = "employee";
     try {
       const roleResponse = await api.get<{ role: UserRole | null }>(`/api/user-roles/${userId}`);
@@ -63,36 +71,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (role === "founder") {
         setApprovalStatus("approved");
       } else {
-        setApprovalStatus(profileData.approval_status as ApprovalStatus);
+        setApprovalStatus((profileData.approval_status as ApprovalStatus) ?? null);
       }
     } else {
       setHasProfile(false);
       setApprovalStatus(null);
     }
-  };
+  }, []);
+
+  const refreshUserData = useCallback(async () => {
+    try {
+      const response = await api.get<{ user: AuthUser; token: string }>("/api/auth/session");
+      const nextSession: AuthSession = { access_token: response.token, token_type: "bearer" };
+      setSession(nextSession);
+      setUser(response.user);
+      setAuthToken(response.token);
+      await fetchUserData(response.user.id);
+    } catch {
+      setSession(null);
+      setUser(null);
+      setUserRole(null);
+      setApprovalStatus(null);
+      setHasProfile(false);
+    }
+  }, [fetchUserData]);
 
   useEffect(() => {
     const loadSession = async () => {
       try {
-        const response = await api.get<{ user: AuthUser; token: string }>("/api/auth/session");
-        const nextSession: AuthSession = { access_token: response.token, token_type: "bearer" };
-        setSession(nextSession);
-        setUser(response.user);
-        setAuthToken(response.token);
-        await fetchUserData(response.user.id);
-      } catch {
-        setSession(null);
-        setUser(null);
-        setUserRole(null);
-        setApprovalStatus(null);
-        setHasProfile(false);
+        await refreshUserData();
       } finally {
         setIsLoading(false);
       }
     };
 
     loadSession();
-  }, []);
+  }, [refreshUserData]);
 
   const signOut = async () => {
     try {
@@ -108,12 +122,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, userRole, approvalStatus, hasProfile, isLoading, signOut }}>
+    <AuthContext.Provider value={{ user, session, userRole, approvalStatus, hasProfile, isLoading, refreshUserData, signOut }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {

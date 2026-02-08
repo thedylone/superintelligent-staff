@@ -34,8 +34,33 @@ interface GoogleCredentialResponse {
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [googleLoaded, setGoogleLoaded] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+  const [googleConfigError, setGoogleConfigError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+    api
+      .get<{ clientId: string }>("/api/auth/google/config")
+      .then((data) => {
+        if (!isMounted) return;
+        setGoogleClientId(data.clientId);
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        const message =
+          error instanceof Error ? error.message : "Google Sign-In is unavailable";
+        console.error("Failed to load Google OAuth config:", error);
+        setGoogleConfigError(message);
+        toast.error(message);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!googleClientId || googleConfigError) return;
     // Load Google Identity Services
     const script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
@@ -44,7 +69,7 @@ export default function Auth() {
     script.onload = () => {
       if (window.google) {
         window.google.accounts.id.initialize({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          client_id: googleClientId,
           callback: handleGoogleResponse,
         });
         setGoogleLoaded(true);
@@ -55,7 +80,7 @@ export default function Auth() {
     return () => {
       document.head.removeChild(script);
     };
-  }, []);
+  }, [googleClientId, googleConfigError]);
 
   const handleGoogleResponse = async (response: GoogleCredentialResponse) => {
     setIsLoading(true);
@@ -64,6 +89,7 @@ export default function Auth() {
         redirected: boolean;
         redirectUrl?: string;
         token?: string;
+        user?: { id: string };
       }>("/api/auth/google", {
         credential: response.credential,
       });
@@ -80,7 +106,23 @@ export default function Auth() {
 
       setAuthToken(result.token);
       toast.success("Signed in successfully!");
-      window.location.href = "/";
+      let shouldOnboard = true;
+      if (result.user?.id) {
+        try {
+          const [profileResponse, roleResponse] = await Promise.all([
+            api.get<{ profile: { approval_status?: string } | null }>("/api/profile", {
+              userId: result.user.id,
+            }),
+            api.get<{ role: string | null }>(`/api/user-roles/${result.user.id}`),
+          ]);
+          const isApproved = profileResponse.profile?.approval_status === "approved";
+          const isFounder = roleResponse.role === "founder";
+          shouldOnboard = !(isApproved || isFounder);
+        } catch (error) {
+          console.error("Failed to load profile status:", error);
+        }
+      }
+      window.location.href = shouldOnboard ? "/onboarding" : "/";
     } catch (error) {
       toast.error("An error occurred during sign in");
       console.error(error);
@@ -90,6 +132,12 @@ export default function Auth() {
   };
 
   const handleGoogleSignIn = () => {
+    if (!googleClientId || googleConfigError) {
+      toast.error(
+        googleConfigError || "Google Sign-In is not configured for this app"
+      );
+      return;
+    }
     if (window.google && googleLoaded) {
       window.google.accounts.id.prompt();
     } else {
