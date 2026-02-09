@@ -2,7 +2,7 @@
 
 # Superintelligent Chief of Staff
 
-Superintelligent Chief of Staff is an AI-powered internal system that turns meeting notes and organizational knowledge into approved, actionable updates — coordinating execution through a company-wide dashboard and targeted team email notifications.
+Superintelligent Chief of Staff is an AI-powered internal system that turns meeting notes and organizational knowledge into approved, actionable updates- coordinating execution through a company-wide dashboard and targeted team email notifications.
 
 It functions as a decision and execution layer for modern organizations, with leadership approval built into the flow.
 
@@ -165,7 +165,7 @@ Built using a modern AI-first development platform to enable rapid iteration whi
 ## Why This Exists
 
 As teams scale, alignment breaks first.
-Superintelligent Chief of Staff exists to ensure that **every important conversation turns into approved, coordinated action** — without founders becoming the bottleneck.
+Superintelligent Chief of Staff exists to ensure that **every important conversation turns into approved, coordinated action** without founders becoming the bottleneck.
 
 ---
 
