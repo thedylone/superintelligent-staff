@@ -106,7 +106,7 @@ export const registerTestNetworkRoutes = ({
             email: `${name
               .toLowerCase()
               .replace(" ", ".")
-              .slice(0, 6)}}@openai.com`,
+              .slice(0, 6)}@openai.com`,
             name,
             department: dept,
             role_title: deptTitles[dept][deptIndex[dept]],

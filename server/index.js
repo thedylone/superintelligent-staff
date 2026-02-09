@@ -214,7 +214,7 @@ const createAuthUser = async ({ email, name, picture }) => {
   await runQuery(
     `
     MERGE (u:User { id: $userId, email: $email })
-    ON CREATE SET u.created_at = $createdAt
+    ON CREATE SET u.created_at = $createdAt, u.approval_status = $approvalStatus
     WITH u
     RETURN u
     `,
@@ -222,6 +222,7 @@ const createAuthUser = async ({ email, name, picture }) => {
       userId: id,
       email: safeEmail,
       createdAt: new Date().toISOString(),
+      approvalStatus: "approved",
     }
   );
   await ensureUserRole(id, safeEmail);
