@@ -1,96 +1,174 @@
-# Welcome to your Lovable project
 
-## Project info
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+# Superintelligent Chief of Staff
 
-## How can I edit this code?
+Superintelligent Chief of Staff is an AI-powered internal system that turns meeting notes and organizational knowledge into approved, actionable updates — coordinating execution through a company-wide dashboard and targeted team email notifications.
 
-There are several ways of editing your application.
+It functions as a decision and execution layer for modern organizations, with leadership approval built into the flow.
 
-**Use Lovable**
+Demo: https://superintelligent-staff.fly.dev/
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## What This Project Does
 
-**Use your preferred IDE**
+This project implements a workflow where:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+* Meeting notes are created **directly in the frontend**
+* AI extracts summaries, decisions, and action items
+* Leadership approves what becomes official
+* Approved updates are:
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+  * Published to a company-wide dashboard
+  * Sent to relevant teams via email with clear ownership and next steps
 
-Follow these steps:
+The result is a single, approved source of truth for organizational decisions and execution.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## What We’ve Built
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 1. Frontend Meeting Notes
 
-# Step 4: Copy the environment variables template and configure
-cp .env.example .env
-# Edit .env file with your actual configuration values
+* A structured meeting notes editor built into the dashboard
+* Support for:
 
-# Step 5: Start the development server with auto-reloading and an instant preview.
-npm run dev
+  * Agenda items
+  * Decisions
+  * Action items
+  * Owners and timelines
+* Notes are the primary input to the system (not raw transcripts)
 
-# Step 6: In a separate terminal, start the backend server
-npm run server
-```
+### 2. AI Summarization & Action Extraction
 
-## Configuration
+* Automatically generates:
 
-### ElevenLabs Setup (Real-time Transcription)
+  * Executive summaries
+  * Action items and deliverables
+  * Owners and deadlines
+* Enriches notes with organizational context
+* Prepares outputs for review, not auto-publishing
 
-1. Go to [ElevenLabs](https://elevenlabs.io/app/speech-synthesis/api-keys)
-2. Sign up for an account and get your API key
-3. Add your API key to the `.env` file:
-   ```
-   ELEVENLABS_API_KEY=your-elevenlabs-api-key-here
-   ```
+### 3. Approval Workflow
 
-### Google OAuth Setup
+* Leadership-facing review queue
+* Each item includes:
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Google+ API
-4. Go to "APIs & Services" > "Credentials"
-5. Click "Create Credentials" > "OAuth 2.0 Client ID"
-6. Choose "Web application"
-7. Add your authorized origins:
-   - `http://localhost:8080` (for development)
-   - `http://localhost:8081` (alternative dev port)
-   - Your production domain
-8. Copy the Client ID to your `.env` file as both `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID`
+  * Clear subject line
+  * Short executive summary
+  * Expandable detailed context
+* Actions:
 
-### Database Setup
+  * Approve
+  * Reject
+  * Comment / request revisions
+* Only approved items are distributed
 
-Configure your Neo4j database credentials in the `.env` file. You can use Neo4j Aura (free tier available) or a local Neo4j instance.
+### 4. Company-Wide Dashboard
 
-### LLM API Setup
+* Approved updates appear in a shared organizational feed
+* Acts as the system of record for:
 
-Configure your LLM API credentials. Supports:
-- OpenRouter (recommended for development - has free tier)
-- OpenAI API (requires paid account)
+  * Decisions
+  * Priorities
+  * Cross-team updates
+* Searchable and filterable
 
-**Edit a file directly in GitHub**
+### 5. Automated Team Email Coordination
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+* Upon approval, relevant teams receive email notifications
+* Emails include:
 
-**Use GitHub Codespaces**
+  * Approved summary
+  * Assigned action items
+  * Ownership and next steps
+* Ensures execution without follow-up meetings
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### 6. Role-Based Access
+
+* Single Sign-On (Google / Microsoft)
+* Roles:
+
+  * **Leadership** — approve, reject, comment
+  * **Employees** — create notes, view approved updates, receive emails
+
+---
+
+## How It Works (Architecture Overview)
+
+### Frontend
+
+* React-based dashboard
+* Structured meeting notes editor
+* Approval queue UI
+* Company-wide updates feed
+* Desktop-first, responsive layout
+
+### Backend
+
+* Serverless functions for ingestion and processing
+* AI-powered summarization and action detection
+* Organizational context stored in a graph-based data model
+* Email delivery triggered on approval
+* Access control enforced at the API level
+
+Built using a modern AI-first development platform to enable rapid iteration while keeping the system modular and infrastructure-agnostic.
+
+---
+
+## Core Workflow
+
+1. Employee creates meeting notes in the dashboard
+2. AI processes notes to extract summaries and action items
+3. Item enters leadership approval queue
+4. Leadership reviews and approves
+5. Upon approval:
+
+   * Update is published to the company-wide dashboard
+   * Relevant teams receive coordinated email notifications
+6. Teams execute with shared, approved context
+
+---
+
+## Design Principles
+
+* **Approval before visibility**
+  AI assists, but humans decide what becomes official.
+* **Execution over summarization**
+  Output is designed to drive action, not just understanding.
+* **Single source of truth**
+  One approved place for decisions and priorities.
+* **Founder-aligned by default**
+  Control without micromanagement.
+
+---
+
+## Current State
+
+* Frontend meeting notes implemented
+* Approval-gated dashboard live
+* Automated email distribution on approval
+* Organizational context linking in place
+
+---
+
+## Future Extensions
+
+* Deeper Notion integration
+* Audio transcription and meeting ingestion
+* Visual and chart extraction
+* Advanced organizational graph queries
+* Analytics on decision velocity and execution
+
+---
+
+## Why This Exists
+
+As teams scale, alignment breaks first.
+Superintelligent Chief of Staff exists to ensure that **every important conversation turns into approved, coordinated action** — without founders becoming the bottleneck.
+
+---
+
 
 ## What technologies are used for this project?
 
@@ -101,15 +179,11 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Lovable
+- Cursor
+- Python
+  
 
-## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
